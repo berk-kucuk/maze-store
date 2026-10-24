@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "maze-store"
+version = "1.5.0"
+description = "Maze Store — browse and install Maze Linux apps; installs run in a terminal behind sudo"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "berkkucukk", email = "berkkucukk@proton.me" }]
+dependencies = ["PyQt6>=6.6.0"]
+
+[project.urls]
+Homepage = "https://github.com/berk-kucuk/maze-store"
+
+[project.scripts]
+maze-store = "mazestore.gui.app:run"
+
+[tool.setuptools.packages.find]
+include = ["mazestore*"]

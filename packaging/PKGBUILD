@@ -1,0 +1,122 @@
+# Maintainer: berkkucukk <berkkucukk@proton.me>
+#
+# LOCAL-BUILD PKGBUILD — see ../build-pkg.sh, which writes `pkgver` and drops
+# `maze-store-$pkgver.tar.gz` next to this file before invoking makepkg.
+
+pkgname=maze-store
+pkgver=1.5.0
+pkgrel=1
+pkgdesc="Maze Store — browse and install Maze Linux apps; installs run in a terminal and sudo asks for your password"
+arch=('any')
+url="https://mazelinux.berkkucukk.com.tr"
+license=('GPL3')
+
+# Deliberately no polkit rule, no setuid helper and no system service: the store
+# has no privileges of its own. Every change runs as `sudo -k pacman …` in a
+# terminal. The one background piece is a systemd *user* timer that checks for
+# updates as the logged-in user and only ever posts a notification.
+depends=(
+    'maze-python'      # shared Python runtime with PyQt6: /opt/maze/venv
+    'pacman'           # pacman -Q, pacman-conf, and the installs themselves
+    'sudo'             # asks the password in the terminal
+    'konsole'          # where installs run (any other terminal is used if present)
+    'libnotify'        # notify-send, for the background update check
+)
+makedepends=('imagemagick')
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+    cd "$srcdir/maze-store-${pkgver}"
+
+    install -dm755 "$pkgdir/opt/maze-store"
+    cp -r mazestore assets main.py "$pkgdir/opt/maze-store/"
+    install -m644 MAZE-STORE.png maze-store-logo.svg "$pkgdir/opt/maze-store/"
+    install -m755 maze-store-run "$pkgdir/opt/maze-store/maze-store-run"
+
+    install -dm755 "$pkgdir/usr/bin"
+    install -m755 /dev/stdin "$pkgdir/usr/bin/maze-store" << 'LAUNCHER'
+#!/usr/bin/env bash
+exec /opt/maze/venv/bin/python3 /opt/maze-store/main.py "$@"
+LAUNCHER
+
+    install -dm755 "$pkgdir/usr/share/applications"
+    install -m644 /dev/stdin "$pkgdir/usr/share/applications/maze-store.desktop" << 'DESKTOP'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Maze Store
+GenericName=App Store
+GenericName[tr]=Uygulama Mağazası
+Comment=Browse and install Maze Linux apps
+Comment[tr]=Maze Linux uygulamalarını keşfet ve kur
+Exec=/usr/bin/maze-store
+Icon=maze-store
+Terminal=false
+Categories=System;PackageManager;Settings;
+Keywords=store;apps;install;package;pacman;mağaza;uygulama;kur;paket;
+StartupNotify=true
+StartupWMClass=maze-store
+DESKTOP
+
+    # ── Background update check (systemd user units) ───────────────────────
+    # Enabled for every user through the global wants/ link below (what
+    # `systemctl --global enable` would create). A user turns the alerts off
+    # from the store's sidebar, which the check honours; to stop the timer
+    # entirely: systemctl --user mask maze-store-updates.timer
+    install -Dm644 /dev/stdin "$pkgdir/usr/lib/systemd/user/maze-store-updates.service" << 'SERVICE'
+[Unit]
+Description=Maze Store: check the Maze repository for app updates
+Documentation=file:///usr/share/doc/maze-store/README.md
+# Needs a session that can show notifications. (network-online.target is a
+# system target the user manager cannot see; an offline check just uses the
+# cached catalogue.)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/maze-store --check-updates
+# A check is a download of ~15 KiB and a pacman -Q; keep it out of the way.
+Nice=10
+IOSchedulingClass=idle
+CPUSchedulingPolicy=idle
+TimeoutStartSec=15min
+NoNewPrivileges=true
+PrivateTmp=true
+SERVICE
+
+    install -Dm644 /dev/stdin "$pkgdir/usr/lib/systemd/user/maze-store-updates.timer" << 'TIMER'
+[Unit]
+Description=Maze Store: periodic update check
+PartOf=graphical-session.target
+
+[Timer]
+# First check 10 minutes after login — not during it — then every 6 hours.
+# The random delay spreads checks so every Maze machine does not hit the repo
+# at the same minute. (No Persistent=: it only applies to OnCalendar timers.)
+OnStartupSec=10min
+OnUnitActiveSec=6h
+RandomizedDelaySec=20min
+AccuracySec=5min
+
+[Install]
+WantedBy=timers.target
+TIMER
+    install -dm755 "$pkgdir/usr/lib/systemd/user/timers.target.wants"
+    ln -s ../maze-store-updates.timer \
+        "$pkgdir/usr/lib/systemd/user/timers.target.wants/maze-store-updates.timer"
+
+    install -Dm644 maze-store-logo.svg \
+        "$pkgdir/usr/share/icons/hicolor/scalable/apps/maze-store.svg"
+    for size in 16 22 24 32 48 64 128 256 512; do
+        install -dm755 "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps"
+        magick MAZE-STORE.png -resize "${size}x${size}" \
+            "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/maze-store.png" \
+            2>/dev/null || install -m644 MAZE-STORE.png \
+            "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/maze-store.png"
+    done
+
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
