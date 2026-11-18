@@ -61,11 +61,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "lbl_depends": "DEPENDS ON",
         "lbl_optdepends": "OPTIONAL",
         "lbl_website": "Website",
-        "cmd_note": "A terminal window opens and runs this. sudo asks for your "
-                    "password every time; pacman shows what will change and waits "
-                    "for your confirmation. -Syu also brings the rest of the system up "
-                    "to date, because installing against a newer repo without it is a "
-                    "partial upgrade.",
+        "cmd_note": "A terminal window opens and runs this. Only this package is "
+                    "installed: pacman checks its signature, shows what will change and "
+                    "waits for your confirmation, and sudo asks for your password every "
+                    "time. The rest of the system is left as it is.",
         "remove_note": "Removing runs: {cmd}",
         "empty_search": "Nothing matches “{q}”.",
         "empty_installed": "No Maze apps installed yet.",
@@ -91,6 +90,56 @@ STRINGS: dict[str, dict[str, str]] = {
                      "can change or break parts of the desktop.\n\nRemove anyway?",
         "open_fail": "This package has no app to open from the menu.",
         "now_terminal": "Waiting for the terminal…",
+        "nav_sources": "MORE SOURCES",
+        "src_arch": "Arch repositories",
+        "src_aur": "AUR",
+        "search_arch": "Search the Arch repositories",
+        "search_aur": "Search the AUR",
+        "arch_eyebrow": "ARCH LINUX",
+        "arch_title": "Arch repositories",
+        "arch_sub": "Official packages from core, extra and multilib, signed by the "
+                    "Arch Linux developers. Installs run pacman -S --needed in a "
+                    "terminal: just that package, the rest of the system is left as it is.",
+        "aur_eyebrow": "ARCH USER REPOSITORY",
+        "aur_title": "AUR",
+        "aur_sub": "Build scripts submitted by users and reviewed by no one. A terminal "
+                   "opens, {helper} shows you the PKGBUILD, and you decide. Read it "
+                   "before you accept.",
+        "aur_no_helper": "paru is not installed. Maze Store builds AUR packages with paru.",
+        "btn_get_paru": "Install paru",
+        "ext_hint": "Type in the search box above to search.",
+        "ext_short": "Type at least {n} characters to search the AUR.",
+        "ext_searching": "Searching…",
+        "ext_error": "The search failed: {why}",
+        "ext_more": "Showing the first {shown} of {n}. Narrow the search to see the rest.",
+        "count_pkgs": "{n} packages",
+        "btn_remove_short": "REMOVE",
+        "pill_ood": "OUT OF DATE",
+        "pill_orphan": "ORPHAN",
+        "meta_votes": "{n} votes",
+        "tip_aur_page": "Open the AUR page: PKGBUILD, comments, history",
+        "status_ext": "{src} · {n} results",
+        "aur_confirm_title": "Install from the AUR?",
+        "aur_confirm_body": "{name} is built from a script a user uploaded to the AUR. "
+                            "Nobody has reviewed it.\n\nA terminal opens and {helper} "
+                            "shows you the PKGBUILD first. Read it before you accept; "
+                            "sudo asks for your password only for the final install."
+                            "\n\nContinue?",
+        "upd_maze_sub": "from the Maze repository",
+        "upd_arch_sub": "from the Arch repositories",
+        "upd_aur_sub": "built from the AUR",
+        "upd_checking": "Checking for updates…",
+        "upd_check_failed": "Could not check the Arch repositories (offline?). Press Refresh to try again.",
+        "one_title": "Update just this package?",
+        "one_body": "{name} depends on packages that have updates of their own:\n\n{list}\n\n"
+                    "Only {name} will be updated, and the system's databases are not "
+                    "refreshed. If the new {name} was built against the newer versions "
+                    "above, it may not start until you update the whole system.",
+        "one_only": "Just this package",
+        "one_all": "Update whole system",
+        "paru_title": "paru is not installed",
+        "paru_body": "AUR packages are built with paru, which is in the Maze "
+                     "repository. Install it now?",
     },
     "tr": {
         "search": "Uygulama ara",
@@ -149,10 +198,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "lbl_depends": "BAĞIMLILIKLAR",
         "lbl_optdepends": "İSTEĞE BAĞLI",
         "lbl_website": "Web sitesi",
-        "cmd_note": "Bir terminal penceresi açılır ve bu komutu çalıştırır. sudo her "
-                    "seferinde şifreni sorar; pacman neyin değişeceğini gösterir ve "
-                    "onayını bekler. -Syu sistemin geri kalanını da günceller, çünkü "
-                    "daha yeni bir depoya karşı onsuz kurulum kısmi güncelleme olur.",
+        "cmd_note": "Bir terminal penceresi açılır ve bu komutu çalıştırır. Yalnızca bu "
+                    "paket kurulur: pacman imzasını doğrular, neyin değişeceğini gösterir "
+                    "ve onayını bekler; sudo her seferinde şifreni sorar. Sistemin geri "
+                    "kalanına dokunulmaz.",
         "remove_note": "Kaldırma şu komutu çalıştırır: {cmd}",
         "empty_search": "“{q}” ile eşleşen bir şey yok.",
         "empty_installed": "Henüz yüklü Maze uygulaması yok.",
@@ -179,6 +228,55 @@ STRINGS: dict[str, dict[str, str]] = {
                      "kaldırılsın mı?",
         "open_fail": "Bu paketin menüden açılacak bir uygulaması yok.",
         "now_terminal": "Terminal bekleniyor…",
+        "nav_sources": "DİĞER KAYNAKLAR",
+        "src_arch": "Arch depoları",
+        "src_aur": "AUR",
+        "search_arch": "Arch depolarında ara",
+        "search_aur": "AUR'da ara",
+        "arch_eyebrow": "ARCH LINUX",
+        "arch_title": "Arch depoları",
+        "arch_sub": "core, extra ve multilib'den resmi paketler, Arch Linux "
+                    "geliştiricileri tarafından imzalı. Kurulum terminalde "
+                    "pacman -S --needed ile çalışır: yalnızca o paket, sistemin geri kalanına dokunulmaz.",
+        "aur_eyebrow": "ARCH KULLANICI DEPOSU",
+        "aur_title": "AUR",
+        "aur_sub": "Kullanıcıların yüklediği ve kimsenin denetlemediği derleme "
+                   "betikleri. Bir terminal açılır, {helper} sana PKGBUILD'i gösterir "
+                   "ve kararı sen verirsin. Onaylamadan önce oku.",
+        "aur_no_helper": "paru kurulu değil. Maze Store AUR paketlerini paru ile derler.",
+        "btn_get_paru": "paru'yu kur",
+        "ext_hint": "Aramak için yukarıdaki kutuya yaz.",
+        "ext_short": "AUR'da aramak için en az {n} karakter yaz.",
+        "ext_searching": "Aranıyor…",
+        "ext_error": "Arama başarısız oldu: {why}",
+        "ext_more": "{n} sonucun ilk {shown} tanesi gösteriliyor. Gerisi için aramayı daralt.",
+        "count_pkgs": "{n} paket",
+        "btn_remove_short": "KALDIR",
+        "pill_ood": "GÜNCEL DEĞİL",
+        "pill_orphan": "SAHİPSİZ",
+        "meta_votes": "{n} oy",
+        "tip_aur_page": "AUR sayfasını aç: PKGBUILD, yorumlar, geçmiş",
+        "status_ext": "{src} · {n} sonuç",
+        "aur_confirm_title": "AUR'dan kurulsun mu?",
+        "aur_confirm_body": "{name}, bir kullanıcının AUR'a yüklediği bir betikle "
+                            "derlenir. Kimse onu denetlemedi.\n\nBir terminal açılır ve "
+                            "{helper} önce PKGBUILD'i gösterir. Onaylamadan önce oku; "
+                            "sudo şifreni yalnızca son kurulum için sorar.\n\nDevam edilsin mi?",
+        "upd_maze_sub": "Maze deposundan",
+        "upd_arch_sub": "Arch depolarından",
+        "upd_aur_sub": "AUR'dan derlenmiş",
+        "upd_checking": "Güncellemeler kontrol ediliyor…",
+        "upd_check_failed": "Arch depoları kontrol edilemedi (çevrimdışı mı?). Tekrar denemek için Yenile'ye bas.",
+        "one_title": "Yalnızca bu paket güncellensin mi?",
+        "one_body": "{name}, kendi güncellemesi bekleyen paketlere bağlı:\n\n{list}\n\n"
+                    "Yalnızca {name} güncellenir; sistemin paket veritabanı yenilenmez. "
+                    "Yeni {name} yukarıdakilerin yeni sürümleriyle derlendiyse, tüm sistemi "
+                    "güncelleyene kadar açılmayabilir.",
+        "one_only": "Yalnızca bu paket",
+        "one_all": "Tüm sistemi güncelle",
+        "paru_title": "paru kurulu değil",
+        "paru_body": "AUR paketleri Maze deposunda bulunan paru ile derlenir. "
+                     "Şimdi kurulsun mu?",
     },
 }
 

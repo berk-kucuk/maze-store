@@ -3,13 +3,15 @@ from __future__ import annotations
 
 import time
 
-from PyQt6.QtCore import QSize, QTimer, Qt, QUrl, pyqtSignal
+from PyQt6.QtCore import QRect, QSize, QTimer, Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices, QGuiApplication, QMouseEvent
 from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
                              QSizePolicy, QVBoxLayout, QWidget)
 
 from mazestore.core.actions import display_command
+from mazestore.core.external import ExtPackage, aur_page
 from mazestore.core.model import App
+from mazestore.core.repo import package_url
 from mazestore.gui.glass import GlassFrame
 from mazestore.gui.glyphs import glyph
 from mazestore.gui.i18n import language, t
@@ -311,7 +313,10 @@ class DetailPage(QScrollArea):
         head_row.addWidget(label(t("lbl_command" if installing else "lbl_command_remove"), "section"))
         head_row.addStretch(1)
         cv.addLayout(head_row)
-        cmd = display_command("install" if installing else "remove", [app.name])
+        if installing and app.pkg.filename:
+            cmd = display_command("install-file", [package_url(app.pkg.filename)])
+        else:
+            cmd = display_command("install" if installing else "remove", [app.name])
         row = QHBoxLayout()
         row.setSpacing(10)
         cmd_lbl = label("$ " + cmd, "command")
@@ -340,3 +345,117 @@ class DetailPage(QScrollArea):
     @property
     def current(self) -> str | None:
         return self._app.name if self._app else None
+
+
+class _ClampedLabel(QLabel):
+    """Word-wrapped text cut to `lines` lines at its current width, ending in
+    "…"; the full text is the tooltip. AUR descriptions run long, and a card
+    has room for two lines."""
+
+    def __init__(self, text: str, name: str, lines: int = 2):
+        super().__init__(objectName=name)
+        self._full = " ".join(text.split())
+        self._lines = lines
+        self.setWordWrap(True)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(self.fontMetrics().lineSpacing() * lines + 2)
+        self.setText(self._full)
+
+    def resizeEvent(self, ev) -> None:
+        super().resizeEvent(ev)
+        fm = self.fontMetrics()
+        w = max(1, self.width())
+        limit = fm.lineSpacing() * self._lines + 1
+
+        def fits(t: str) -> bool:
+            return fm.boundingRect(QRect(0, 0, w, 100_000), Qt.TextFlag.TextWordWrap, t).height() <= limit
+        if fits(self._full):
+            self.setText(self._full)
+            self.setToolTip("")
+            return
+        words = self._full.split(" ")
+        lo, hi = 0, len(words)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if fits(" ".join(words[:mid]) + "…"):
+                lo = mid
+            else:
+                hi = mid - 1
+        self.setText(" ".join(words[:lo]) + "…")
+        self.setToolTip(self._full)
+
+
+class ExtRow(GlassFrame):
+    """A search result from the Arch repositories or the AUR: no detail page,
+    everything a decision needs is on the card."""
+    action = pyqtSignal(str, str)
+
+    def __init__(self, pkg: ExtPackage, busy: bool):
+        GlassFrame.__init__(self, radius=18)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(104)
+        aur = pkg.source == "aur"
+
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(14)
+        lay.addWidget(icon_label(pkg.name, 52), 0, Qt.AlignmentFlag.AlignVCenter)
+
+        col = QVBoxLayout()
+        col.setSpacing(3)
+        col.addStretch(1)
+        top = QHBoxLayout()
+        top.setSpacing(8)
+        name = label(pkg.name, "title")
+        name.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        top.addWidget(name)
+        pills = []
+        if busy:
+            pills.append(Pill(t("pill_busy"), "busy"))
+        elif pkg.state == "update":
+            pills.append(Pill(t("pill_update"), "update"))
+        elif pkg.state in ("installed", "local"):
+            pills.append(Pill(t("pill_installed"), "installed"))
+        if pkg.out_of_date:
+            pills.append(Pill(t("pill_ood"), "local"))
+        if aur and not pkg.maintainer:
+            pills.append(Pill(t("pill_orphan"), "local"))
+        for p in pills:
+            top.addWidget(p, 0, Qt.AlignmentFlag.AlignVCenter)
+        top.addStretch(1)
+        col.addLayout(top)
+        meta = [pkg.repo, pkg.version]
+        if pkg.installed is not None and pkg.installed != pkg.version:
+            meta[-1] = f"{pkg.installed} → {pkg.version}"
+        if aur:
+            meta.append(t("meta_votes", n=pkg.votes))
+        col.addWidget(label("  ·  ".join(meta), "meta"))
+        col.addWidget(_ClampedLabel(pkg.desc, "tagline", lines=2))
+        col.addStretch(1)
+        lay.addLayout(col, 1)
+        name.setToolTip(pkg.name)
+
+        if aur:
+            page = QPushButton(objectName="round")
+            page.setIcon(glyph("external", 15))
+            page.setIconSize(QSize(15, 15))
+            page.setFixedSize(32, 32)
+            page.setToolTip(t("tip_aur_page"))
+            page.setCursor(Qt.CursorShape.PointingHandCursor)
+            page.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(aur_page(pkg.name))))
+            lay.addWidget(page, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        install = "aur-install" if aur else "install"
+        if pkg.state in ("available", "update"):
+            btn = QPushButton(t("btn_get") if pkg.state == "available" else t("btn_update"),
+                              objectName="get")
+            act = install
+        else:
+            btn = QPushButton(t("btn_remove_short"), objectName="open")
+            act = "remove"
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setEnabled(not busy)
+        if act != "install":   # Maze Store picks the exact command at click time
+            btn.setToolTip("$ " + display_command(act, [pkg.name]))
+        btn.clicked.connect(lambda: self.action.emit(act, pkg.name))
+        lay.addWidget(btn, 0, Qt.AlignmentFlag.AlignVCenter)

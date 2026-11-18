@@ -15,11 +15,13 @@ a second of CPU.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -41,13 +43,16 @@ def fetch() -> bool:
     url = repo.fetch_url()
     if not url.startswith("https://"):
         return False
-    req = urllib.request.Request(url, headers={"User-Agent": f"maze-store/{__version__}"})
-    try:
+    def get(u: str, limit: int) -> bytes:
+        req = urllib.request.Request(u, headers={"User-Agent": f"maze-store/{__version__}"})
         with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
-            data = resp.read(MAX_DB_BYTES + 1)
+            return resp.read(limit + 1)
+    try:
+        data = get(url, MAX_DB_BYTES)
         if len(data) > MAX_DB_BYTES:
             return False
-        repo.save_cache(data)
+        sig = get(repo.sig_url(), 64 * 1024)
+        repo.save_cache(data, sig)      # ValueError unless signed by Maze (ST1)
         return True
     except (urllib.error.URLError, OSError, ValueError, TimeoutError):
         return False
@@ -71,9 +76,16 @@ def _save_seen(keys: set[str]) -> None:
     path = state_file()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"notified": sorted(keys)}, indent=1))
-        os.replace(tmp, path)
+        # A fresh name each time (audit ST3), like repo.save_cache.
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".notified.")
+        try:
+            with os.fdopen(fd, "w") as fh:
+                fh.write(json.dumps({"notified": sorted(keys)}, indent=1))
+            os.replace(tmp, path)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
+            raise
     except OSError:
         pass
 

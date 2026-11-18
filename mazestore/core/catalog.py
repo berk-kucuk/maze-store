@@ -51,6 +51,18 @@ CATALOG: dict[str, Entry] = {
         "Maze Connect", "privacy",
         "Pair your phone over the LAN with pinned mutual TLS.",
         "Telefonunu yerel ağda, sabitlenmiş karşılıklı TLS ile eşle.", featured=True),
+    "maze-ghost": Entry(
+        "Maze Ghost", "privacy",
+        "A login that keeps nothing: memory-only home, every connection through Tor.",
+        "Hiçbir şey saklamayan oturum: hafızada yaşayan ev dizini, her bağlantı Tor üzerinden."),
+    "maze-capsule": Entry(
+        "Maze Capsule", "privacy",
+        "Seal your files in encrypted capsules (gocryptfs, no root).",
+        "Dosyalarını şifreli kapsüllerde sakla (gocryptfs, root gerekmez)."),
+    "maze-scrub": Entry(
+        "Maze Scrub", "privacy",
+        "See what your photos and documents reveal about you, then remove it.",
+        "Fotoğraf ve belgelerinin seni nasıl ele verdiğini gör, sonra temizle."),
 
     # ── security ─────────────────────────────────────────────────────────────
     "maze-guard": Entry(
@@ -61,6 +73,10 @@ CATALOG: dict[str, Entry] = {
         "Qlam", "security",
         "Warn-first antivirus with on-access protection for your files.",
         "Önce uyaran antivirüs: dosyaların için erişim anında koruma.", featured=True),
+    "maze-glovebox": Entry(
+        "Maze Glovebox", "security",
+        "Open a suspicious file in a sealed box: no network, none of your files.",
+        "Şüpheli bir dosyayı kapalı bir kutuda aç: ağ yok, dosyalarına erişim yok."),
     "sentinai": Entry(
         "SentinAI", "security",
         "AI cybersecurity assistant with OSINT tooling.",

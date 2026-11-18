@@ -6,11 +6,19 @@
 #      maze-store-run install <pkg>...
 #      maze-store-run remove  <pkg>...
 #      maze-store-run upgrade
+#      maze-store-run install-only <pkg>...     (pacman -S, no database refresh)
+#      maze-store-run install-file <https-url>... (pacman -U, one package file)
+#      maze-store-run aur-install <pkg>...      (paru -S --needed)
+#      maze-store-run full-upgrade              (paru -Syu)
 #
 #  It prints the exact command, then runs it with `sudo -k`, so the password is
 #  asked for every single time (a cached sudo timestamp is ignored) and is typed
 #  into sudo — never into the store. pacman shows its own transaction summary
 #  and asks for confirmation; nothing here passes --noconfirm.
+#
+#  aur-install and full-upgrade are the exception to sudo -k: paru (shipped
+#  with Maze Linux) builds as the user — makepkg refuses to build as root —
+#  and calls sudo itself only for the final install.
 # =============================================================================
 set -u
 
@@ -22,44 +30,70 @@ fi
 
 finish() {
   echo
-  read -rsn1 -p "$(printf "${D}  Pencereyi kapatmak için bir tuşa basın · Press any key to close${N}")" || true
+  read -rsn1 -p "$(printf "${D}  Press any key to close${N}")" || true
   echo
   exit "${1:-0}"
 }
 
 action="${1:-}"; shift || true
 
+url_re='^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~@+:-]+)*/[A-Za-z0-9@_+][A-Za-z0-9@._+:-]*\.pkg\.tar\.(zst|xz|gz)$'
 for p in "$@"; do
-  if [[ ! "$p" =~ ^[a-z0-9@_+][a-z0-9@._+-]{0,127}$ ]]; then
-    printf "${R}  Geçersiz paket adı / invalid package name: %q${N}\n" "$p"
+  if [[ "$action" == install-file ]]; then
+    if [[ ! "$p" =~ $url_re || "$p" == *..* ]]; then
+      printf "${R}  Invalid package URL: %q${N}\n" "$p"
+      finish 2
+    fi
+  elif [[ ! "$p" =~ ^[a-z0-9@_+][a-z0-9@._+-]{0,127}$ ]]; then
+    printf "${R}  Invalid package name: %q${N}\n" "$p"
     finish 2
   fi
 done
 
 case "$action" in
-  install) [[ $# -gt 0 ]] || finish 2; cmd=(sudo -k pacman -Syu --needed -- "$@"); verb="Kuruluyor · Installing" ;;
-  remove)  [[ $# -gt 0 ]] || finish 2; cmd=(sudo -k pacman -Rns -- "$@");          verb="Kaldırılıyor · Removing" ;;
-  upgrade) cmd=(sudo -k pacman -Syu);                                                verb="Sistem güncelleniyor · Upgrading" ;;
-  *) printf "${R}  Bilinmeyen işlem / unknown action: %q${N}\n" "$action"; finish 2 ;;
+  install)      [[ $# -gt 0 ]] || finish 2; cmd=(sudo -k pacman -Syu --needed -- "$@"); verb="Installing" ;;
+  install-only) [[ $# -gt 0 ]] || finish 2; cmd=(sudo -k pacman -S --needed -- "$@");   verb="Installing" ;;
+  install-file) [[ $# -gt 0 ]] || finish 2; cmd=(sudo -k pacman -U --needed -- "$@");   verb="Updating just this package" ;;
+  remove)       [[ $# -gt 0 ]] || finish 2; cmd=(sudo -k pacman -Rns -- "$@");          verb="Removing" ;;
+  upgrade)      cmd=(sudo -k pacman -Syu);                                              verb="Upgrading the system" ;;
+  aur-install|full-upgrade)
+    [[ "$action" == full-upgrade || $# -gt 0 ]] || finish 2
+    if [[ $EUID -eq 0 ]]; then
+      printf "${R}  AUR packages are not built as root${N}\n"; finish 2
+    fi
+    if ! command -v paru >/dev/null 2>&1; then
+      printf "${R}  paru is not installed. Install it with: sudo pacman -S paru${N}\n"; finish 127
+    fi
+    if [[ "$action" == full-upgrade ]]; then
+      cmd=(paru -Syu); verb="Upgrading the system and AUR packages"
+    else
+      cmd=(paru -S --needed "$@"); verb="Installing from the AUR"
+    fi ;;
+  *) printf "${R}  Unknown action: %q${N}\n" "$action"; finish 2 ;;
 esac
 
 clear 2>/dev/null || true
 printf "\n  ${B}M A Z E   S T O R E${N}\n\n"
 printf "  ${verb}${*:+: ${B}$*${N}}\n\n"
-printf "  ${D}Çalıştırılacak komut · Command:${N}\n"
-printf "  ${G}\$ sudo pacman"
-for a in "${cmd[@]:3}"; do [[ "$a" == "--" ]] || printf " %s" "$a"; done
-printf "${N}\n\n"
-printf "  ${D}Şifren sudo tarafından sorulur; Maze Store şifreni görmez.${N}\n"
-printf "  ${D}Your password is asked by sudo; Maze Store never sees it.${N}\n\n"
+printf "  ${D}Command:${N}\n"
+if [[ "${cmd[0]}" == paru ]]; then
+  printf "  ${G}\$"
+  for a in "${cmd[@]}"; do printf " %s" "$a"; done
+  printf "${N}\n\n"
+else
+  printf "  ${G}\$ sudo pacman"
+  for a in "${cmd[@]:3}"; do [[ "$a" == "--" ]] || printf " %s" "$a"; done
+  printf "${N}\n\n"
+  printf "  ${D}Your password is asked by sudo; Maze Store never sees it.${N}\n\n"
+fi
 
 "${cmd[@]}"
 rc=$?
 
 echo
 if [[ $rc -eq 0 ]]; then
-  printf "  ${G}${B}✓ Tamamlandı · Done${N}\n"
+  printf "  ${G}${B}✓ Done${N}\n"
 else
-  printf "  ${R}${B}✗ İşlem tamamlanmadı (çıkış kodu %d) · Did not complete (exit %d)${N}\n" "$rc" "$rc"
+  printf "  ${R}${B}✗ Did not complete (exit %d)${N}\n" "$rc"
 fi
 finish "$rc"

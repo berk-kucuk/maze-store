@@ -33,7 +33,8 @@ setuid helper and no root daemon. Every change to the system runs in a terminal
 window as a plain pacman command behind `sudo -k`:
 
 ```
-sudo pacman -Syu --needed <package>   # install / update
+sudo pacman -U --needed <package-url> # install / update one Maze app
+sudo pacman -S --needed <package>     # install an Arch package
 sudo pacman -Rns <package>            # remove
 sudo pacman -Syu                      # update everything
 ```
@@ -58,17 +59,38 @@ every single time.
 - **Library** — *Installed* and *Updates*, with counts in the sidebar
 - **Search** across names and descriptions in both languages
 
+### More sources: Arch repositories and the AUR
+- The front page stays the Maze catalogue; **More sources** in the sidebar adds
+  two search pages that reuse the search box
+- **Arch repositories** — `pacman -Ss` over core, extra and multilib, as the
+  user. Installs and removals are the same `sudo -k pacman` commands as Maze apps
+- **AUR** — searched through the official RPC over HTTPS, with votes, orphan and
+  out-of-date flags and a link to each package's AUR page. Installs run
+  `paru -S --needed <pkg>` in a terminal *as the user* — paru ships with Maze
+  Linux. It shows the PKGBUILD, and sudo is asked only for the final install.
+  If paru was removed, the store offers to reinstall it from [mazelinux]
+
 ### Installing
 - **Terminal, not a hidden helper** — Konsole by default; GNOME Terminal,
   kgx, xfce4-terminal, Alacritty, kitty, foot, WezTerm and xterm also work
-- **Full-upgrade installs** — `-Syu --needed`, because installing against a
-  newer repo without upgrading the rest is the partial upgrade that breaks
-  Arch systems
 - **Package names are validated twice** — in the app and again in
   `maze-store-run` — and passed as separate arguments, never through a shell
 - **Live state** — the window watches pacman's local database and refreshes
   the moment a transaction finishes, from the store or anywhere else
 - **System components ask twice** before being removed
+- **Update just what you click** — a Maze app (or any pending repository update)
+  is installed from its own file, `sudo pacman -U --needed <url>`: only that
+  package, the system's databases are not refreshed, and pacman checks the
+  file's signature. If one of its dependencies has a pending update too, the
+  store names it and lets you pick *just this package* or *the whole system*
+- **New Arch packages** install with `pacman -S --needed` — no `-y`, so no
+  partial upgrade
+- **Updates from every source** — the Updates page lists Maze, AUR and Arch
+  repository updates together. Refresh (F5) checks all three, without root:
+  the repositories like `checkupdates` (a copy of the sync dbs under
+  `~/.cache/maze-store`, refreshed with fakeroot), AUR builds by comparing
+  `pacman -Qm` with the AUR. *Update all* runs `pacman -Syu`, or `paru -Syu`
+  when AUR packages have updates
 
 ### Update alerts
 - A systemd **user** timer checks for Maze app updates 10 minutes after login
@@ -124,7 +146,7 @@ privileges; installing is a separate step you run yourself.
 | Command | What it does |
 |---|---|
 | `maze-store` | Open the store |
-| `maze-store --view=updates` | Open straight on a page (`all`, `installed`, `updates`, a category) |
+| `maze-store --view=updates` | Open straight on a page (`all`, `installed`, `updates`, `arch`, `aur`, a category) |
 | `maze-store --check-updates --print` | List pending Maze updates in the terminal |
 | `maze-store --check-updates` | Run the background check now (posts a notification if needed) |
 
@@ -150,8 +172,10 @@ systemctl --user mask --now maze-store-updates.timer
 | `mazestore/core/dbparse.py` | Reads the sync db (gzip / zstd tar) in memory — nothing from it touches the disk |
 | `mazestore/core/local.py` | `pacman -Q`, a port of libalpm's `vercmp`, and launching installed apps from their `.desktop` files |
 | `mazestore/core/catalog.py` | Display names, categories and taglines; hidden packages (debug symbols, plumbing) |
-| `mazestore/core/actions.py` | Builds the pacman command and the terminal that runs it |
+| `mazestore/core/actions.py` | Builds the pacman (or paru) command and the terminal that runs it |
+| `mazestore/core/external.py` | Arch repository / AUR search: `pacman -Ss` and AUR RPC parsing, no Qt |
 | `maze-store-run` | Runs inside the terminal: re-validates, prints the command, runs it under `sudo -k` |
+| `mazestore/core/syscheck.py` | Every pending repository update with its file URL and depends (`--pending-upgrades`) |
 | `mazestore/core/checker.py` | The background update check — no Qt imported, a few MB and a fraction of a second |
 | `mazestore/gui/` | The window: glass panels, painted pills and switches, line glyphs, frameless title bar |
 

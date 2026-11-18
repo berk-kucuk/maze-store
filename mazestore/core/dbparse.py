@@ -16,6 +16,10 @@ from dataclasses import dataclass, field
 # package list, and parsing it would just burn memory.
 MAX_DB_BYTES = 32 * 1024 * 1024
 MAX_MEMBER_BYTES = 256 * 1024
+# What the whole archive may unpack to, and how many entries it may hold. The
+# real Maze db is about 0.1 MB unpacked with two entries per package.
+MAX_UNPACKED_BYTES = 256 * 1024 * 1024
+MAX_MEMBERS = 100_000
 
 _LIST_FIELDS = {"DEPENDS", "OPTDEPENDS", "LICENSE", "PROVIDES", "CONFLICTS",
                 "REPLACES", "GROUPS", "MAKEDEPENDS", "CHECKDEPENDS"}
@@ -26,6 +30,7 @@ class RepoPackage:
     name: str
     version: str
     desc: str = ""
+    filename: str = ""      # e.g. maze-cloak-1.3.4-1-any.pkg.tar.zst
     url: str = ""
     csize: int = 0          # download size, bytes
     isize: int = 0          # installed size, bytes
@@ -67,6 +72,7 @@ def package_from_desc(fields: dict[str, list[str]]) -> RepoPackage | None:
         name=name,
         version=version,
         desc=" ".join(fields.get("DESC", [])),
+        filename=(fields.get("FILENAME") or [""])[0],
         url=(fields.get("URL") or [""])[0],
         csize=_int(fields, "CSIZE"),
         isize=_int(fields, "ISIZE"),
@@ -90,8 +96,18 @@ def read_db(data: bytes) -> dict[str, RepoPackage]:
         raise ValueError(f"not a pacman database: {exc}") from exc
 
     packages: dict[str, RepoPackage] = {}
+    members = 0
     with tar:
         for member in tar:
+            # The compressed size is capped above, but not what it unpacks to
+            # (audit ST2): to step past a member, tarfile decompresses all of
+            # it, so one header claiming 10 GB costs minutes of CPU even
+            # though nothing is kept. Checked BEFORE moving on to the next
+            # member — that step is where the skipping happens.
+            members += 1
+            if (member.offset_data + member.size > MAX_UNPACKED_BYTES
+                    or members > MAX_MEMBERS):
+                raise ValueError("database unpacks to too much")
             # Only regular `*/desc` files are read, and they are only read into
             # memory — nothing from the archive ever touches the filesystem.
             if not member.isfile() or not member.name.endswith("/desc"):

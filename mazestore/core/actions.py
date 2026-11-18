@@ -7,9 +7,19 @@ exact command and pacman's transaction summary and types their password into
 sudo, not into us. `-k` makes sudo ignore a cached timestamp, so a password is
 asked every time, even if the user ran sudo a minute ago in another tab.
 
-Install is `pacman -Syu --needed <pkg>`, not `pacman -S <pkg>`: the catalogue
-may come from a db fresher than the system's, and on Arch installing against a
-newer db without upgrading the rest is the partial upgrade that breaks systems.
+Updating one package is `pacman -U --needed <url of its file>`: just that
+package, and the system's sync databases are not refreshed — refreshing them
+(-Sy) and then installing one package is the partial upgrade that breaks Arch
+systems. pacman checks the file's signature (RemoteFileSigLevel) and resolves
+its dependencies from the databases the system already has. `install` keeps
+the full `pacman -Syu --needed <pkg>` for when the user picks the whole
+system, and `install-only` (`-S --needed`, no -y) installs a new Arch package
+from the databases as they are.
+
+AUR packages are the one exception to `sudo -k`: they are built by an AUR
+helper — paru, which Maze Linux ships — that must run as the user — building as root is what
+makepkg refuses — and that calls sudo itself for the final install. It shows
+the PKGBUILD for review first and, like pacman, waits for confirmation.
 """
 from __future__ import annotations
 
@@ -23,7 +33,16 @@ from pathlib import Path
 # on a root command line.
 _NAME_RE = re.compile(r"^[a-z0-9@_+][a-z0-9@._+-]{0,127}$")
 
-ACTIONS = ("install", "remove", "upgrade")
+ACTIONS = ("install", "install-only", "install-file", "remove", "upgrade",
+           "aur-install", "full-upgrade")
+
+# A package file on an https server, as the runner script checks it again.
+_URL_RE = re.compile(r"^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~@+:-]+)*"
+                     r"/[A-Za-z0-9@_+][A-Za-z0-9@._+:-]*\.pkg\.tar\.(zst|xz|gz)$")
+
+# The AUR helper: paru, which Maze Linux ships by default (it is in
+# [mazelinux]). The runner script uses it too.
+AUR_HELPERS = ("paru",)
 
 RUNNER_CANDIDATES = [
     Path("/opt/maze-store/maze-store-run"),
@@ -35,21 +54,50 @@ def valid_name(name: str) -> bool:
     return bool(_NAME_RE.match(name))
 
 
+def valid_url(url: str) -> bool:
+    return bool(_URL_RE.match(url)) and ".." not in url
+
+
+def aur_helper() -> str | None:
+    for h in AUR_HELPERS:
+        if shutil.which(h):
+            return h
+    return None
+
+
 def pacman_argv(action: str, packages: list[str]) -> list[str]:
     """The exact command shown to the user and run by maze-store-run."""
     if action not in ACTIONS:
         raise ValueError(f"unknown action {action!r}")
-    bad = [p for p in packages if not valid_name(p)]
+    check = valid_url if action == "install-file" else valid_name
+    bad = [p for p in packages if not check(p)]
     if bad:
         raise ValueError(f"invalid package name(s): {bad}")
     if action == "install":
         if not packages:
             raise ValueError("nothing to install")
         return ["sudo", "-k", "pacman", "-Syu", "--needed", "--", *packages]
+    if action == "install-only":
+        if not packages:
+            raise ValueError("nothing to install")
+        return ["sudo", "-k", "pacman", "-S", "--needed", "--", *packages]
+    if action == "install-file":
+        if not packages:
+            raise ValueError("nothing to install")
+        return ["sudo", "-k", "pacman", "-U", "--needed", "--", *packages]
+    if action == "full-upgrade":
+        # Repositories and AUR in one go, as the user; the helper calls sudo.
+        return [aur_helper() or AUR_HELPERS[0], "-Syu"]
     if action == "remove":
         if not packages:
             raise ValueError("nothing to remove")
         return ["sudo", "-k", "pacman", "-Rns", "--", *packages]
+    if action == "aur-install":
+        if not packages:
+            raise ValueError("nothing to install")
+        # No `--`: not every helper's parser takes it, and the names were
+        # just checked not to start with a hyphen.
+        return [aur_helper() or AUR_HELPERS[0], "-S", "--needed", *packages]
     return ["sudo", "-k", "pacman", "-Syu"]
 
 
@@ -66,9 +114,11 @@ def runner() -> Path | None:
     return None
 
 
-# (binary, args placed before the command). Konsole first: it is Maze's
-# terminal. The rest cover a user who swapped desktops.
+# (binary, args placed before the command). Maze Terminal first: it is
+# Maze's terminal (one process per window, so it stays until the window
+# closes), then Konsole. The rest cover a user who swapped desktops.
 _TERMINALS: list[tuple[str, list[str]]] = [
+    ("maze-terminal", ["-e"]),
     ("konsole", ["--separate", "-p", "tabtitle=Maze Store", "-e"]),
     ("kgx", ["--"]),
     ("gnome-terminal", ["--wait", "--"]),

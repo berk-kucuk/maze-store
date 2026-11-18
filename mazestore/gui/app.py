@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import sys
+import traceback
 
 from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 from PyQt6.QtWidgets import QApplication
@@ -38,7 +39,15 @@ def _activate_running_instance(view: str) -> bool:
     return False
 
 
+def _log_exception(kind, value, tb) -> None:
+    # PyQt6 aborts the process on an exception escaping a slot unless an
+    # excepthook is set. A bug in one handler should cost a traceback in the
+    # journal, not the window.
+    traceback.print_exception(kind, value, tb)
+
+
 def run() -> int:
+    sys.excepthook = _log_exception
     if os.geteuid() == 0:
         # The whole design is that the store has no privileges and sudo asks in
         # a terminal. Running it as root would silently throw that away.
